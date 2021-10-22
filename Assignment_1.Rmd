@@ -1,9 +1,55 @@
 ---
-title: "Assignment_1"
-author: "Yoji Toriumi"
-date: "10/21/2021"
-output: html_document
+title: "[SES 5215] Assignment_1: Research Questions"
+author: "Yoji Toriumi, Terry Kim, Francisco Montes"
+date: "10/22/2021"
+output: 
+  rmdformats::downcute
 ---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1. Research question
+Is the number of AirBnbs within the Suffolk County correlated with the number of crimes?
+
+## 2. Prior research
+
+* Ke, O'Brien, and Heydari discovered that an increase in Airbnbs disrupted the neighborhood social organizations that have historically kept crime rate at low levels because transient people who are not embedded in the neighborhood may cause crime prevalence. On the other hand, neighborhood tries to gain benefits from the transients as they are more vulnerable and lack information about the town they are staying (https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0253315).
+
+* This is another study that Ke, O'Brien, and Heydari referred to. This paper only examined the correlation between crime and Airbnb listings, not controlling for other neighborhood characteristics nor the temporal relationship between the arrival of Airbnb listings and shifts in the crime rate. (Xu Y.-H., Pennington-Gray L. & Kim J. The sharing economy: a geographically weighted regression approach to examine crime and the shared lodging sector. Journal of travel research 58, 1193–1208, (2019))
+
+* Last study available in the literature landscape used policy implementations as a natural experiment, but analyzed only at the citywide scale. This research was also referred in Ke, O'Brien, and Heydari research (Han, W. & Wang, X. Does home sharing impact crime rate? a tale of two cities. https://aisel.aisnet.org/icis2019/sustainable_is/sustainable_is/6/ (2019)).
+
+
+## 3. The definition of our sample population
+
+* For crime, we only took account for the crimes recorded by the City of Boston Police. Therefore, we may have missed any incidents not publicly reported.
+
+* For geography, we only examined Suffolk County, so not every single county within Massachusetts is included.
+
+* We are focusing on Airbnbs, but there is a plurality of non-hotel residences. There must have been cross-over reportings among such types.
+
+
+## 4. Categorical variables
+The four categorical variables used in our research can be summarized as below:
+
+* Crime dates
+* Crime locations (streets and tracts)
+* Crime day (Weekdays vs. Weekends)
+* Crime time (morning, daytime, afternoon, evening)
+
+
+## 5. Continuous variables.
+The three continuous variables used in our research can be summarized as below:
+
+* Population within each tract
+* Number of Airbnbs
+* Number of Crimes
+
+
+## 6. Load data
+Our team used the following libraries for this exercise:
 
 ```{r setup, include=FALSE}
 library(osmextract)
@@ -17,10 +63,11 @@ library(tidytransit)
 library(tidycensus)
 library(dplyr)
 library(stars)
-
-knitr::opts_chunk$set(echo = TRUE)
 ```
 
+Then, we used Massachusetts plane coordinate to retrieve the geospace, and went onto "Inside Airbnb" and City of Boston government website to locate the number of Airbnbs and the number of crimes in 2021 (Up to September).
+
+Last, we imported American Community Census data recorded in 2019 to represent estimated, up-to-population with Suffolk County.
 
 ```{r cars}
 MA_state_plane <- "+proj=lcc +lat_1=41.71666666666667 +lat_2=42.68333333333333 +lat_0=41 +lon_0=-71.5 +x_0=200000 +y_0=750000 +ellps=GRS80 +units=m +no_defs"
@@ -37,8 +84,12 @@ crime <- crime %>%
   st_as_sf(coords = c("Long", "Lat"), crs = "WGS84")  %>%
   st_transform(MA_state_plane)
 
-vars2010 <- load_variables(2010, "sf1")
 acsvars <- load_variables(2019, "acs5")
+```
+
+Afterwards, we started to visualize the Airbnbs and the crimes reported within each tract within the Suffolk County.
+
+```{r}
 
 boston_pop <- get_acs(geography = "tract", county = "Suffolk", state = "MA", 
                            year = 2019, survey = "acs5",
@@ -53,7 +104,95 @@ boston_pop <- boston_pop %>%
 
 boston_pop <- boston_pop %>% 
   mutate(crime = lengths(st_covers(boston_pop, crime)))
+
+ggplot(boston_pop)+ geom_sf(aes(fill = crime))
 ```
 
+## 7. References
 
+* Crime data : https://www.policedatainitiative.org/datasets/
+
+* Airbnb data : http://insideairbnb.com/boston/?neighbourhood=&filterEntireHomes=false&filterHighlyAvailable=false&filterRecentReviews=false&filterMultiListings=false
+
+```{r}
+suncrime <- crime %>% 
+  filter(DAY_OF_WEEK == "Sunday")
+moncrime <- crime %>% 
+  filter(DAY_OF_WEEK == "Monday")
+tuecrime <- crime %>% 
+  filter(DAY_OF_WEEK == "Tuesday")
+wedcrime <- crime %>% 
+  filter(DAY_OF_WEEK == "Wednesday")
+thucrime <- crime %>% 
+  filter(DAY_OF_WEEK == "Thursday")
+fricrime <- crime %>% 
+  filter(DAY_OF_WEEK == "Friday")
+satcrime <- crime %>% 
+  filter(DAY_OF_WEEK == "Saturday")
+
+boston_pop <- boston_pop %>%
+  mutate(Sunday = lengths(st_covers(boston_pop, suncrime))) %>%
+  mutate(Monday = lengths(st_covers(boston_pop, moncrime))) %>%
+  mutate(Tuesday = lengths(st_covers(boston_pop, tuecrime))) %>%
+  mutate(Wednesday = lengths(st_covers(boston_pop, wedcrime))) %>%
+  mutate(Thursday = lengths(st_covers(boston_pop, thucrime))) %>%
+  mutate(Friday = lengths(st_covers(boston_pop, fricrime))) %>%
+  mutate(Saturday = lengths(st_covers(boston_pop, satcrime)))
+
+bostondate <- boston_pop %>% 
+  as.data.frame() %>% 
+  select(8:14)
+
+a <- bostondate %>% 
+  rowwise() %>%
+  mutate(date = colnames[max.col()])
+
+boston_pop <- boston_pop %>% 
+  mutate(date = colnames(bostondate)[apply(bostondate, 1, which.max)])
+```
+
+```{r}
+crime <- crime %>% 
+  mutate(type = case_when(`HOUR` == 0 ~ "nighttime",
+                          `HOUR` == 1 ~ "nighttime",
+                          `HOUR` == 2 ~ "nighttime",
+                          `HOUR` == 3 ~ "nighttime",
+                          `HOUR` == 4 ~ "nighttime",
+                          `HOUR` == 5 ~ "nighttime",
+                          `HOUR` == 6 ~ "daytime",
+                          `HOUR` == 7 ~ "daytime",
+                          `HOUR` == 8 ~ "daytime",
+                          `HOUR` == 9 ~ "daytime",
+                          `HOUR` == 10 ~ "daytime",
+                          `HOUR` == 11 ~ "daytime",
+                          `HOUR` == 12 ~ "daytime",
+                          `HOUR` == 13 ~ "daytime",
+                          `HOUR` == 14 ~ "daytime",
+                          `HOUR` == 15 ~ "daytime",
+                          `HOUR` == 16 ~ "daytime",
+                          `HOUR` == 17 ~ "daytime",
+                          `HOUR` == 18 ~ "nighttime",
+                          `HOUR` == 19 ~ "nighttime",
+                          `HOUR` == 20 ~ "nighttime",
+                          `HOUR` == 21 ~ "nighttime",
+                          `HOUR` == 22 ~ "nighttime",
+                          `HOUR` == 23 ~ "nighttime",
+                                                    ))
+
+nightcrime <- crime %>% 
+  filter(type == "nighttime")
+daytimecrime <- crime %>% 
+  filter(type == "daytime")
+
+boston_pop <- boston_pop %>%
+  mutate(nighttime = lengths(st_covers(boston_pop, nightcrime))) %>%
+  mutate(daytime = lengths(st_covers(boston_pop, daytimecrime)))
+
+bostontime <- boston_pop %>% 
+  as.data.frame() %>% 
+  select(16:17)
+
+boston_pop <- boston_pop %>% 
+  mutate(time = colnames(bostontime)[apply(bostontime, 1, which.max)])
+```
 
