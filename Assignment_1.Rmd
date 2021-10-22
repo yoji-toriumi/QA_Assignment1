@@ -1,6 +1,6 @@
 ---
 title: "Assignment_1"
-author: "Yoji"
+author: "Yoji Toriumi"
 date: "10/21/2021"
 output: html_document
 ---
@@ -14,6 +14,7 @@ library(ggspatial)
 library(tigris)
 library(wesanderson)
 library(tidytransit)
+library(tidycensus)
 library(dplyr)
 library(stars)
 
@@ -33,19 +34,26 @@ airbnb <- airbnb %>%
 
 crime <- crime %>% 
   filter(Lat > 0) %>% 
-  st_as_sf(coords = c("Long", "Lat"), crs = "WGS84") %>% 
+  st_as_sf(coords = c("Long", "Lat"), crs = "WGS84")  %>%
   st_transform(MA_state_plane)
 
-ggplot(crime) +
-  geom_sf()
+vars2010 <- load_variables(2010, "sf1")
+acsvars <- load_variables(2019, "acs5")
+
+boston_pop <- get_acs(geography = "tract", county = "Suffolk", state = "MA", 
+                           year = 2019, survey = "acs5",
+                           variables = c(tpop = "B01001_001"),
+                           output = "wide", geometry = TRUE)
+
+boston_pop <- boston_pop %>% 
+  st_transform(MA_state_plane)
+
+boston_pop <- boston_pop %>%
+  mutate(airbnb = lengths(st_covers(boston_pop, airbnb)))
+
+boston_pop <- boston_pop %>% 
+  mutate(crime = lengths(st_covers(boston_pop, crime)))
 ```
 
-## Including Plots
 
-You can also embed plots, for example:
 
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
