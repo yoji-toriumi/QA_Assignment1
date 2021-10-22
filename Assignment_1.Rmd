@@ -1,0 +1,51 @@
+---
+title: "Assignment_1"
+author: "Yoji"
+date: "10/21/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(osmextract)
+library(tidyverse)
+library(sf)
+library(ggthemes)
+library(ggspatial)
+library(tigris)
+library(wesanderson)
+library(tidytransit)
+library(dplyr)
+library(stars)
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r cars}
+MA_state_plane <- "+proj=lcc +lat_1=41.71666666666667 +lat_2=42.68333333333333 +lat_0=41 +lon_0=-71.5 +x_0=200000 +y_0=750000 +ellps=GRS80 +units=m +no_defs"
+
+airbnb <- read_csv("http://data.insideairbnb.com/united-states/ma/boston/2021-09-19/visualisations/listings.csv")
+crime <- read_csv("https://data.boston.gov/dataset/6220d948-eae2-4e4b-8723-2dc8e67722a3/resource/f4495ee9-c42c-4019-82c1-d067f07e45d2/download/tmpefo1y6tr.csv")
+
+airbnb <- airbnb %>% 
+  st_as_sf(coords = c("longitude", "latitude"), crs = "WGS84") %>% 
+  st_transform(MA_state_plane)
+
+crime <- crime %>% 
+  filter(Lat > 0) %>% 
+  st_as_sf(coords = c("Long", "Lat"), crs = "WGS84") %>% 
+  st_transform(MA_state_plane)
+
+ggplot(crime) +
+  geom_sf()
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
