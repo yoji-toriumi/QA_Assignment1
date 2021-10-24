@@ -5,11 +5,6 @@ date: "10/22/2021"
 output: 
   rmdformats::downcute
 ---
-
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
-
 ## 1. Research question
 Is the number of AirBnbs within the Suffolk County correlated with the number of crimes?
 
@@ -52,17 +47,13 @@ The three continuous variables used in our research can be summarized as below:
 Our team used the following libraries for this exercise:
 
 ```{r setup, include=FALSE}
-library(osmextract)
 library(tidyverse)
 library(sf)
 library(ggthemes)
 library(ggspatial)
-library(tigris)
-library(wesanderson)
-library(tidytransit)
 library(tidycensus)
-library(dplyr)
-library(stars)
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE)
 ```
 
 Then, we used Massachusetts plane coordinate to retrieve the geospace, and went onto "Inside Airbnb" and City of Boston government website to locate the number of Airbnbs and the number of crimes in 2021 (Up to September).
@@ -104,8 +95,6 @@ boston_pop <- boston_pop %>%
 
 boston_pop <- boston_pop %>% 
   mutate(crime = lengths(st_covers(boston_pop, crime)))
-
-ggplot(boston_pop)+ geom_sf(aes(fill = crime))
 ```
 
 ## 7. References
@@ -142,10 +131,6 @@ boston_pop <- boston_pop %>%
 bostondate <- boston_pop %>% 
   as.data.frame() %>% 
   select(8:14)
-
-a <- bostondate %>% 
-  rowwise() %>%
-  mutate(date = colnames[max.col()])
 
 boston_pop <- boston_pop %>% 
   mutate(date = colnames(bostondate)[apply(bostondate, 1, which.max)])
@@ -194,5 +179,18 @@ bostontime <- boston_pop %>%
 
 boston_pop <- boston_pop %>% 
   mutate(time = colnames(bostontime)[apply(bostontime, 1, which.max)])
+
+ggplot(boston_pop) +
+  geom_sf(aes(fill = date))
+```
+
+```{r}
+ggplot(boston_pop) +
+  geom_sf(aes(fill = time))
+```
+
+
+```{r}
+kable(head(boston_pop))
 ```
 
