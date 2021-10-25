@@ -53,14 +53,14 @@ library(ggthemes)
 library(ggspatial)
 library(tidycensus)
 library(knitr)
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE, echo = TRUE)
 ```
 
 Then, we used Massachusetts plane coordinate to retrieve the geospace, and went onto "Inside Airbnb" and City of Boston government website to locate the number of Airbnbs and the number of crimes in 2021 (Up to September).
 
 Last, we imported American Community Census data recorded in 2019 to represent estimated, up-to-population with Suffolk County.
 
-```{r cars}
+```{r}
 MA_state_plane <- "+proj=lcc +lat_1=41.71666666666667 +lat_2=42.68333333333333 +lat_0=41 +lon_0=-71.5 +x_0=200000 +y_0=750000 +ellps=GRS80 +units=m +no_defs"
 
 airbnb <- read_csv("http://data.insideairbnb.com/united-states/ma/boston/2021-09-19/visualisations/listings.csv")
@@ -80,8 +80,7 @@ acsvars <- load_variables(2019, "acs5")
 
 Afterwards, we started to visualize the Airbnbs and the crimes reported within each tract within the Suffolk County.
 
-```{r}
-
+```{r, warning = FALSE, message = FALSE, echo = FALSE, results=FALSE}
 boston_pop <- get_acs(geography = "tract", county = "Suffolk", state = "MA", 
                            year = 2019, survey = "acs5",
                            variables = c(tpop = "B01001_001"),
@@ -96,12 +95,6 @@ boston_pop <- boston_pop %>%
 boston_pop <- boston_pop %>% 
   mutate(crime = lengths(st_covers(boston_pop, crime)))
 ```
-
-## 7. References
-
-* Crime data : https://www.policedatainitiative.org/datasets/
-
-* Airbnb data : http://insideairbnb.com/boston/?neighbourhood=&filterEntireHomes=false&filterHighlyAvailable=false&filterRecentReviews=false&filterMultiListings=false
 
 ```{r}
 suncrime <- crime %>% 
@@ -173,12 +166,15 @@ boston_pop <- boston_pop %>%
   mutate(nighttime = lengths(st_covers(boston_pop, nightcrime))) %>%
   mutate(daytime = lengths(st_covers(boston_pop, daytimecrime)))
 
-bostontime <- boston_pop %>% 
+boston_time <- boston_pop %>% 
   as.data.frame() %>% 
   select(16:17)
 
 boston_pop <- boston_pop %>% 
-  mutate(time = colnames(bostontime)[apply(bostontime, 1, which.max)])
+  mutate(time = colnames(boston_time)[apply(boston_time, 1, which.max)])
+
+boston_pop <- boston_pop %>% 
+  select(1:7, 15, 18)
 
 ggplot(boston_pop) +
   geom_sf(aes(fill = date))
@@ -194,3 +190,8 @@ ggplot(boston_pop) +
 kable(head(boston_pop))
 ```
 
+## 7. References
+
+* Crime data : https://www.policedatainitiative.org/datasets/
+
+* Airbnb data : http://insideairbnb.com/boston/?neighbourhood=&filterEntireHomes=false&filterHighlyAvailable=false&filterRecentReviews=false&filterMultiListings=false
