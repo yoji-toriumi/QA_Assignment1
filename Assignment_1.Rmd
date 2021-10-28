@@ -53,6 +53,7 @@ library(ggthemes)
 library(ggspatial)
 library(tidycensus)
 library(knitr)
+library(gridExtra)
 knitr::opts_chunk$set(message = FALSE, echo = TRUE)
 ```
 
@@ -185,10 +186,193 @@ ggplot(boston_pop) +
   geom_sf(aes(fill = time))
 ```
 
-
 ```{r}
 kable(head(boston_pop))
 ```
+
+```{r}
+tpopE_t_test <- t.test(boston_pop$tpopE)
+airbnb_t_test <- t.test(boston_pop$airbnb)
+crime_t_test <- t.test(boston_pop$crime)
+
+tpopE_quartiles <- quantile(boston_pop$tpopE, na.rm = TRUE)
+airbnb_quartiles <- quantile(boston_pop$airbnb, na.rm = TRUE)
+crime_quartiles <- quantile(boston_pop$crime, na.rm = TRUE)
+
+tpopE_st_dev <- sd(boston_pop$tpopE, na.rm = TRUE)
+airbnb_st_dev <- sd(boston_pop$airbnb, na.rm = TRUE)
+crime_st_dev <- sd(boston_pop$crime, na.rm = TRUE)
+
+tpopE_hist <- ggplot(boston_pop) +
+  geom_histogram(aes(x = tpopE),
+                 bins = 30)
+
+airbnb_hist <- ggplot(boston_pop) +
+  geom_histogram(aes(x = airbnb),
+                 bins = 30)
+
+crime_hist <- ggplot(boston_pop) +
+  geom_histogram(aes(x = crime),
+                 bins = 30)
+```
+
+```{r}
+cont_summary <- tibble(
+  Variable = c("Total Population", 
+               "Number of Airbnb", 
+               "Number of Crime"),
+  `Sample mean` = c(tpopE_t_test$estimate,
+                    airbnb_t_test$estimate,
+                    crime_t_test$estimate),
+  `Population mean (95% confidence) - low` = 
+    c(tpopE_t_test$conf.int[1],
+      airbnb_t_test$conf.int[1],
+      crime_t_test$conf.int[1]),
+  `Population mean (95% confidence) - high` =
+    c(tpopE_t_test$conf.int[2],
+      airbnb_t_test$conf.int[2],
+      crime_t_test$conf.int[2]),
+  Median = c(tpopE_quartiles[3],
+             airbnb_quartiles[3],
+             crime_quartiles[3]),
+  `Interquartile range` = c(tpopE_quartiles[4] - tpopE_quartiles[2],
+                            airbnb_quartiles[4] - airbnb_quartiles[2],
+                            (crime_quartiles[4] - crime_quartiles[2])),
+  `Standard deviation` = c(tpopE_st_dev,
+                          airbnb_st_dev,
+                          crime_st_dev))
+
+kable(cont_summary, digits = 0)
+```
+
+```{r}
+pretty_tpopE_hist <- tpopE_hist +
+  theme_bw() +
+  scale_x_continuous(name = "Median population") +
+  scale_y_continuous(name = "Number of tracts") +
+  theme(axis.text.x = element_text(angle = 90))
+
+pretty_airbnb_hist <- airbnb_hist +
+  theme_bw() + 
+  scale_x_continuous(name = "Number of airbnb") +
+  scale_y_continuous(name = "Number of tracts") +
+  theme(axis.text.x = element_text(angle = 90))
+
+pretty_crime_hist = crime_hist +
+  theme_bw() +
+  scale_x_continuous(name = "Number of crime") +
+  scale_y_continuous(name = "Number of tracts") +
+  theme(axis.text.x = element_text(angle = 90)) 
+
+grid.arrange(pretty_tpopE_hist, pretty_airbnb_hist, pretty_crime_hist,
+             ncol = 3)
+```
+
+
+
+```{r}
+pct_sunday <- t.test(boston_pop$date == "Sunday")
+pct_monday <- t.test(boston_pop$date == "Monday")
+pct_tuesday <- t.test(boston_pop$date == "Tuesday")
+pct_wednesday <- t.test(boston_pop$date == "Wednesday")
+pct_thursday <- t.test(boston_pop$date == "Thursday")
+pct_friday <- t.test(boston_pop$date == "Friday")
+pct_satursday <- t.test(boston_pop$date == "Saturday")
+
+
+pct_daytime <- t.test(boston_pop$time == "daytime")
+pct_nighttime <- t.test(boston_pop$time == "nighttime")
+```
+
+```{r}
+cat_summary_date <- tibble(`Majority Crimedate in 2020` = 
+                              c("Sunday",
+                                "Monday",
+                                "Tuesday",
+                                "Wednesday",
+                                "Thursday",
+                                "Friday",
+                                "Saturday"),
+                            `Sample proportion` = 
+                              c(pct_sunday$estimate * 100,
+                                pct_monday$estimate *100,
+                                pct_tuesday$estimate * 100,
+                                pct_wednesday$estimate * 100,
+                                pct_thursday$estimate * 100,
+                                pct_friday$estimate * 100,
+                                pct_satursday$estimate * 100
+                                ),
+                            `95-percent confidence - low` = 
+                              c(pct_sunday$conf.int[1] * 100,
+                                pct_monday$conf.int[1] * 100,
+                                pct_tuesday$conf.int[1] * 100,
+                                pct_wednesday$conf.int[1] * 100,
+                                pct_thursday$conf.int[1] * 100,
+                                pct_friday$conf.int[1] * 100,
+                                pct_satursday$conf.int[1] * 100),
+                            `95-percent confidence - high` = 
+                              c(pct_sunday$conf.int[2] * 100,
+                                pct_monday$conf.int[2] * 100,
+                                pct_tuesday$conf.int[2] * 100,
+                                pct_wednesday$conf.int[2] * 100,
+                                pct_thursday$conf.int[2] * 100,
+                                pct_friday$conf.int[2] * 100,
+                                pct_satursday$conf.int[2] * 100
+                                ))
+
+kable(cat_summary_date, digits = 0)
+```
+
+```{r}
+cat_summary_time <- tibble(`Majority Crimetime in 2020` = 
+                              c("Daytime",
+                                "Nighttime"),
+                            `Sample proportion` = 
+                              c(pct_daytime$estimate * 100,
+                                pct_nighttime$estimate *100),
+                            `95-percent confidence - low` = 
+                              c(pct_daytime$conf.int[1] * 100,
+                                pct_nighttime$conf.int[1] * 100),
+                            `95-percent confidence - high` = 
+                              c(pct_daytime$conf.int[2] * 100,
+                                pct_nighttime$conf.int[2] * 100))
+
+kable(cat_summary_time, digits = 0)
+```
+
+```{r}
+ggplot(cat_summary_date) +
+  geom_bar(aes(x = `Majority Crimedate in 2020`, 
+               y = `Sample proportion`),
+           stat = "identity") +
+  geom_errorbar(aes(x = `Majority Crimedate in 2020`, 
+               y = `Sample proportion`,
+               ymin = `95-percent confidence - low`,
+               ymax = `95-percent confidence - high`),
+           stat = "identity") +
+  scale_y_continuous(name = "Percent of tracts",
+                     breaks = c(0, 5, 10, 15, 20, 25),
+                     labels = c("0", "5%", "10%", "15%", "20%", "25%")) +
+  theme_bw()
+```
+
+```{r}
+ggplot(cat_summary_time) +
+  geom_bar(aes(x = `Majority Crimetime in 2020`, 
+               y = `Sample proportion`),
+           stat = "identity") +
+  geom_errorbar(aes(x = `Majority Crimetime in 2020`, 
+               y = `Sample proportion`,
+               ymin = `95-percent confidence - low`,
+               ymax = `95-percent confidence - high`),
+           stat = "identity") +
+  scale_y_continuous(name = "Percent of tracts",
+                     breaks = c(0, 20, 40, 60, 80),
+                     labels = c("0", "20%", "40%", "60%", "80%")) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90)) 
+```
+
 
 ## 7. References
 
