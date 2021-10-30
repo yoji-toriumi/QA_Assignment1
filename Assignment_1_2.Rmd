@@ -6,20 +6,18 @@ output:
   rmdformats::downcute
 ---
 ## 1. Research question
-Is the number of AirBnbs within the Suffolk County correlated with the number of crimes?
+Is the number of Airbnbs within the Suffolk County correlated with the number of crimes?
 
 ## 2. Prior research
+* Ke, O’Brien, and Heydari concluded that an increase in Airbnbs have disrupted neighborhood social organizations specifically by replacing long term residents, who normally built trust and strong communication ties in the neighborhood, with transient people.  In addition to the social disruption of the neighborhood fabric, they concluded that Airbnb guests are perceived by criminals to be vulnerable and naïve, so they attract attention. (https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0253315).
 
-* Ke, O'Brien, and Heydari discovered that an increase in Airbnbs disrupted the neighborhood social organizations that have historically kept crime rate at low levels because transient people who are not embedded in the neighborhood may cause crime prevalence. On the other hand, neighborhood tries to gain benefits from the transients as they are more vulnerable and lack information about the town they are staying (https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0253315).
+* Another study that Ke, O’Brien, and Heydari referred to examine the correlation between crime and Airbnb listings, not controlling for other neighborhood characteristics nor the temporal relationship between the arrival of Airbnb listings and shifts in crime rates. (Xu Y.-H., Pennington-Gray L. & Kim J. The sharing economy: a geographically weighted regression approach to examine crime and the shared lodging sector. Journal of travel research 58, 1193–1208, (2019))
 
-* This is another study that Ke, O'Brien, and Heydari referred to. This paper only examined the correlation between crime and Airbnb listings, not controlling for other neighborhood characteristics nor the temporal relationship between the arrival of Airbnb listings and shifts in the crime rate. (Xu Y.-H., Pennington-Gray L. & Kim J. The sharing economy: a geographically weighted regression approach to examine crime and the shared lodging sector. Journal of travel research 58, 1193–1208, (2019))
-
-* Last study available in the literature landscape used policy implementations as a natural experiment, but analyzed only at the citywide scale. This research was also referred in Ke, O'Brien, and Heydari research (Han, W. & Wang, X. Does home sharing impact crime rate? a tale of two cities. https://aisel.aisnet.org/icis2019/sustainable_is/sustainable_is/6/ (2019)).
-
+* The last study available in the literature landscape used policy implementations as a natural experiment but analyzed only at the citywide scale. This research was also referred by  Ke, O’Brien, and Heydari. (Han, W. & Wang, X. Does home sharing impact crime rate? a tale of two cities. https://aisel.aisnet.org/icis2019/sustainable_is/sustainable_is/6/ (2019)).
 
 ## 3. The definition of our sample population
 
-* For crime, we only took account for the crimes recorded by the City of Boston Police. Therefore, we may have missed any incidents not publicly reported.
+* For crime, we only took account of crimes recorded by the City of Boston Police. Therefore, we may have missed any incidents not publicly reported.
 
 * For geography, we only examined Suffolk County, so not every single county within Massachusetts is included.
 
@@ -27,7 +25,7 @@ Is the number of AirBnbs within the Suffolk County correlated with the number of
 
 
 ## 4. Categorical variables
-The four categorical variables used in our research can be summarized as below:
+The two categorical variables used in our research can be summarized as below:
 
 * Crime day (Weekdays vs. Weekends)
 * Crime time (morning, daytime, afternoon, evening)
@@ -224,19 +222,19 @@ cri_hg <- ggplot(bos_pop) +
 The result is shown as the following:
 
 - Tract population: 
-* Mean(3,905), StDev(1,843)
-* 95% CI(3,650 ~ 4,159)
-* t(30)
+o Mean(3,905), StDev(1,843)
+o 95% CI(3,650 ~ 4,159)
+o t(30)
 
 - Airbnb: 
-* Mean(15), StDev(21)
-* 95% CI(12 ~ 18)
-* t(10)
+o Mean(15), StDev(21)
+o 95% CI(12 ~ 18)
+o t(10)
 
 - Crime: 
-* Mean(276), StDev(367)
-* 95% CI(226 ~ 327)
-* t(10)
+o Mean(276), StDev(367)
+o 95% CI(226 ~ 327)
+o t(10)
 
 ## 8. Displaying our results (Continous Variables)
 To tabulate our statistical results, we used tibble function.
@@ -248,27 +246,27 @@ es <- tibble(
       "Number of Airbnbs", 
       "Number of crimes"),
   
-  `Sample mean` = c(pop_t$estimate / 1000,
+  `Sample mean` = c(pop_t$estimate,
       bnb_t$estimate,
       cri_t$estimate),
   
-  `Population mean (95% CI) - low` = c(pop_t$conf.int[1] / 1000,
+  `Population mean (95% CI) - low` = c(pop_t$conf.int[1],
       bnb_t$conf.int[1],
       cri_t$conf.int[1]),
   
-  `Population mean (95% CI) - high` = c(pop_t$conf.int[2] / 1000,
+  `Population mean (95% CI) - high` = c(pop_t$conf.int[2],
       bnb_t$conf.int[2],
       cri_t$conf.int[2]),
   
-  Median = c(pop_q[3] / 1000,
+  Median = c(pop_q[3],
       bnb_q[3],
       cri_q[3]),
   
-  `I-Q range` = c(pop_q[4]/1000 - pop_q[2]/1000,
+  `I-Q range` = c(pop_q[4] - pop_q[2],
       bnb_q[4] - bnb_q[2],
       (cri_q[4] - cri_q[2])),
   
-  `StDev` = c(pop_sd/1000,
+  `StDev` = c(pop_sd,
       bnb_sd,
       cri_sd))
 
@@ -305,7 +303,7 @@ cute_cri_hg = cri_hg +
 grid.arrange(cute_pop_hg, cute_bnb_hg, cute_cri_hg, ncol = 3)
 ```
 
-## 8. Displaying our results (Continous Variables)
+## 9. Displaying our results (Categorical Variables)
 First, we made a one sample t-test to reach the 95% CI for the proportion of the sample in each category. We start from the <Day of the Week> first and than AM vs. PM comparison.
 
 The following table and histogram shows the crime distribution per day of week.
@@ -405,7 +403,8 @@ ggplot(AM_vs_PM) +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 90)) 
 ```
-## 9. Conclusion
+
+## 10. Conclusion
 
 * The number of crime incidences were especially high on Mondays and Tuesdays. 
 
@@ -414,7 +413,7 @@ ggplot(AM_vs_PM) +
 Although our team expected crime rate would be higher on weekends, and in the afternoon & at night, the results were surprisingly different - in fact, the opposite. 
 
 
-## 10. References
+## 11. References
 
 * Crime data : https://www.policedatainitiative.org/datasets/
 
