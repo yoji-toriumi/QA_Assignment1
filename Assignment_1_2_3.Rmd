@@ -1,0 +1,450 @@
+---
+title: "[SES 5215] Assignment_1: Research Questions & Assignment 2: Uncertainty and Error"
+author: "Francisco Montes, Terry Kim, Yoji Toriumi"
+date: "10/29/2021"
+output: 
+  rmdformats::downcute
+---
+## 1. Research question
+Is the number of Airbnbs within the Suffolk County correlated with the number of crimes?
+
+## 2. Prior research
+* Ke, O’Brien, and Heydari concluded that an increase in Airbnbs have disrupted neighborhood social organizations specifically by replacing long term residents, who normally built trust and strong communication ties in the neighborhood, with transient people.  In addition to the social disruption of the neighborhood fabric, they concluded that Airbnb guests are perceived by criminals to be vulnerable and naïve, so they attract attention. (https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0253315).
+
+* Another study that Ke, O’Brien, and Heydari referred to examine the correlation between crime and Airbnb listings, not controlling for other neighborhood characteristics nor the temporal relationship between the arrival of Airbnb listings and shifts in crime rates. (Xu Y.-H., Pennington-Gray L. & Kim J. The sharing economy: a geographically weighted regression approach to examine crime and the shared lodging sector. Journal of travel research 58, 1193–1208, (2019))
+
+* The last study available in the literature landscape used policy implementations as a natural experiment but analyzed only at the citywide scale. This research was also referred by  Ke, O’Brien, and Heydari. (Han, W. & Wang, X. Does home sharing impact crime rate? a tale of two cities. https://aisel.aisnet.org/icis2019/sustainable_is/sustainable_is/6/ (2019)).
+
+## 3. The definition of our sample population
+
+* For crime, we only took account of crimes recorded by the City of Boston Police. Therefore, we may have missed any incidents not publicly reported.
+
+* For geography, we only examined Suffolk County, so not every single county within Massachusetts is included.
+
+* We are focusing on Airbnbs, but there is a plurality of non-hotel residences. There must have been cross-over reportings among such types.
+
+
+## 4. Categorical variables
+The two categorical variables used in our research can be summarized as below:
+
+* Crime day (Weekdays vs. Weekends)
+* Crime time (morning, daytime, afternoon, evening)
+
+## 5. Continuous variables.
+The three continuous variables used in our research can be summarized as below:
+
+* Population within each tract
+* Number of Airbnbs
+* Number of Crimes
+
+## 6. Load data
+Our team used the following libraries for this exercise:
+
+```{r, warning = FALSE, message = FALSE}
+library(tidyverse)
+library(sf)
+library(ggthemes)
+library(ggspatial)
+library(tidycensus)
+library(knitr)
+library(readxl)
+library(gridExtra)
+library(jtools)
+library(weights)
+library(srvyr)
+library(survey)
+knitr::opts_chunk$set(message = FALSE, echo = TRUE)
+```
+
+Then, we used Massachusetts plane coordinate to retrieve the geospace, and went onto "Inside Airbnb" and City of Boston government website to locate the number of Airbnbs and the number of crimes in 2021 (Up to September).
+
+Last, we imported American Community Census data recorded in 2019 to represent estimated, up-to-population with Suffolk County.
+
+```{r, warning = FALSE, message = FALSE}
+MA_state_plane <- "+proj=lcc +lat_1=41.71666666666667 +lat_2=42.68333333333333 +lat_0=41 +lon_0=-71.5 +x_0=200000 +y_0=750000 +ellps=GRS80 +units=m +no_defs"
+
+airbnb <- read_csv("http://data.insideairbnb.com/united-states/ma/boston/2021-09-19/visualisations/listings.csv")
+crime <- read_csv("https://data.boston.gov/dataset/6220d948-eae2-4e4b-8723-2dc8e67722a3/resource/f4495ee9-c42c-4019-82c1-d067f07e45d2/download/tmpefo1y6tr.csv")
+
+airbnb <- airbnb %>% 
+  st_as_sf(coords = c("longitude", "latitude"), crs = "WGS84") %>% 
+  st_transform(MA_state_plane)
+
+crime <- crime %>% 
+  filter(Lat > 0) %>% 
+  st_as_sf(coords = c("Long", "Lat"), crs = "WGS84")  %>%
+  st_transform(MA_state_plane)
+
+acsvars <- load_variables(2019, "acs5")
+```
+
+Afterwards, we started to visualize the Airbnbs and the crimes reported within each tract within the Suffolk County.
+
+```{r, warning = FALSE, message = FALSE, results= FALSE}
+bos_pop <- get_acs(geography = "tract", county = "Suffolk", state = "MA", 
+                           year = 2019, survey = "acs5",
+                           variables = c(tpop = "B01001_001", income = "B19113_001"),
+                           output = "wide", geometry = TRUE)
+
+bos_pop <- bos_pop %>% 
+  st_transform(MA_state_plane)
+
+bos_pop <- bos_pop %>%
+  mutate(airbnb = lengths(st_covers(bos_pop, airbnb)))
+
+bos_pop <- bos_pop %>% 
+  mutate(crime = lengths(st_covers(bos_pop, crime)))
+
+bos_pop <- bos_pop %>% 
+  mutate(crime_den = crime / tpopE) %>% 
+  mutate(airbnb_den = airbnb / tpopE)
+```
+
+```{r}
+bos_pop <- bos_pop %>% 
+  mutate(income = case_when(0 < `incomeE` & `incomeE` < 9999 ~ "0_9999",
+                            10000 < `incomeE` & `incomeE` < 14999 ~ "10000_14999",
+                            15000 < `incomeE` & `incomeE` < 24999 ~ "15000_24999",
+                            25000 < `incomeE` & `incomeE` < 34999 ~ "25000_34999",
+                            35000 < `incomeE` & `incomeE` < 49999 ~ "35000_49999",
+                            50000 < `incomeE` & `incomeE` < 64999 ~ "50000_64999",
+                            65000 < `incomeE` & `incomeE` < 74999 ~ "65000_74999",
+                            75000 < `incomeE` ~ "75000"))
+```
+
+After this procedure, we decided to explore if the crime patterns can be gauged in "day of the week" basis.
+
+```{r, warning = FALSE, message = FALSE}
+sun_c <- crime %>% 
+  filter(DAY_OF_WEEK == "Sunday")
+mon_c <- crime %>% 
+  filter(DAY_OF_WEEK == "Monday")
+tue_c <- crime %>% 
+  filter(DAY_OF_WEEK == "Tuesday")
+wed_c <- crime %>% 
+  filter(DAY_OF_WEEK == "Wednesday")
+thu_c <- crime %>% 
+  filter(DAY_OF_WEEK == "Thursday")
+fri_c <- crime %>% 
+  filter(DAY_OF_WEEK == "Friday")
+sat_c <- crime %>% 
+  filter(DAY_OF_WEEK == "Saturday")
+
+bos_pop <- bos_pop %>%
+  mutate(Sun = lengths(st_covers(bos_pop, sun_c))) %>%
+  mutate(Mon = lengths(st_covers(bos_pop, mon_c))) %>%
+  mutate(Tue = lengths(st_covers(bos_pop, tue_c))) %>%
+  mutate(Wed = lengths(st_covers(bos_pop, wed_c))) %>%
+  mutate(Thu = lengths(st_covers(bos_pop, thu_c))) %>%
+  mutate(Fri = lengths(st_covers(bos_pop, fri_c))) %>%
+  mutate(Sat = lengths(st_covers(bos_pop, sat_c)))
+
+bos_date <- bos_pop %>% 
+  as.data.frame() %>% 
+  select(13:19)
+
+bos_pop <- bos_pop %>% 
+  mutate(date = colnames(bos_date)[apply(bos_date, 1, which.max)])
+```
+
+Observing the patterns above, our team felt that it would also be intriguing to see if the crime patterns can be sorted by the categories of time.
+
+```{r, warning = FALSE, message = FALSE}
+crime <- crime %>% 
+  mutate(type = case_when(`HOUR` == 0 ~ "AM",
+                          `HOUR` == 1 ~ "AM",
+                          `HOUR` == 2 ~ "AM",
+                          `HOUR` == 3 ~ "AM",
+                          `HOUR` == 4 ~ "AM",
+                          `HOUR` == 5 ~ "AM",
+                          `HOUR` == 6 ~ "AM",
+                          `HOUR` == 7 ~ "AM",
+                          `HOUR` == 8 ~ "AM",
+                          `HOUR` == 9 ~ "AM",
+                          `HOUR` == 10 ~ "AM",
+                          `HOUR` == 11 ~ "AM",
+                          `HOUR` == 12 ~ "PM",
+                          `HOUR` == 13 ~ "PM",
+                          `HOUR` == 14 ~ "PM",
+                          `HOUR` == 15 ~ "PM",
+                          `HOUR` == 16 ~ "PM",
+                          `HOUR` == 17 ~ "PM",
+                          `HOUR` == 18 ~ "PM",
+                          `HOUR` == 19 ~ "PM",
+                          `HOUR` == 20 ~ "PM",
+                          `HOUR` == 21 ~ "PM",
+                          `HOUR` == 22 ~ "PM",
+                          `HOUR` == 23 ~ "PM"))
+
+PM_c <- crime %>% 
+  filter(type == "PM")
+AM_c <- crime %>% 
+  filter(type == "AM")
+
+bos_pop <- bos_pop %>%
+  mutate(AM = lengths(st_covers(bos_pop, PM_c))) %>%
+  mutate(PM = lengths(st_covers(bos_pop, AM_c)))
+
+bos_time <- bos_pop %>% 
+  as.data.frame() %>% 
+  select(21:22)
+
+bos_pop <- bos_pop %>% 
+  mutate(time = colnames(bos_time)[apply(bos_time, 1, which.max)])
+
+bos_pop <- bos_pop %>% 
+  select(1:12, 20, 23)
+
+ggplot(bos_pop) +
+  geom_sf(aes(fill = crime))
+```
+
+```{r}
+ggplot(bos_pop) +
+  geom_sf(aes(fill = income))
+```
+
+
+```{r, warning = FALSE, message = FALSE}
+ggplot(bos_pop) +
+  geom_sf(aes(fill = time))
+```
+
+
+```{r, warning = FALSE, message = FALSE}
+kable(head(bos_pop))
+```
+
+## 7. Statistical Analysis
+Based on the trimmed data we loaded, we decided to further examine the significance level of our hypothesis to meaningfully contribute to the research duly performed and noted in our references.
+
+The first step is to perform one-sample t-test to see a 95% confidence interval.
+
+```{r, warning = FALSE, message = FALSE}
+pop_t <- t.test(bos_pop$tpopE)
+bnb_t <- t.test(bos_pop$airbnb)
+cri_t <- t.test(bos_pop$crime)
+
+pop_q <- quantile(bos_pop$tpopE)
+bnb_q <- quantile(bos_pop$airbnb)
+cri_q <- quantile(bos_pop$crime)
+
+pop_sd <- sd(bos_pop$tpopE)
+bnb_sd <- sd(bos_pop$airbnb)
+cri_sd <- sd(bos_pop$crime)
+
+pop_hg <- ggplot(bos_pop) +
+  geom_histogram(aes(x = tpopE),
+                 bins = 30)
+
+bnb_hg <- ggplot(bos_pop) +
+  geom_histogram(aes(x = airbnb), bins = 30)
+
+cri_hg <- ggplot(bos_pop) +
+  geom_histogram(aes(x = crime), bins = 30)
+
+```
+
+The result is shown as the following:
+
+- Tract population: 
+o Mean(3,905), StDev(1,843)
+o 95% CI(3,650 ~ 4,159)
+o t(30)
+
+- Airbnb: 
+o Mean(15), StDev(21)
+o 95% CI(12 ~ 18)
+o t(10)
+
+- Crime: 
+o Mean(276), StDev(367)
+o 95% CI(226 ~ 327)
+o t(10)
+
+## 8. Displaying our results (Continous Variables)
+To tabulate our statistical results, we used tibble function.
+
+```{r, warning = FALSE, message = FALSE}
+es <- tibble(
+  
+  Variable = c("Tract Population", 
+      "Number of Airbnbs", 
+      "Number of crimes"),
+  
+  `Sample mean` = c(pop_t$estimate,
+      bnb_t$estimate,
+      cri_t$estimate),
+  
+  `Population mean (95% CI) - low` = c(pop_t$conf.int[1],
+      bnb_t$conf.int[1],
+      cri_t$conf.int[1]),
+  
+  `Population mean (95% CI) - high` = c(pop_t$conf.int[2],
+      bnb_t$conf.int[2],
+      cri_t$conf.int[2]),
+  
+  Median = c(pop_q[3],
+      bnb_q[3],
+      cri_q[3]),
+  
+  `I-Q range` = c(pop_q[4] - pop_q[2],
+      bnb_q[4] - bnb_q[2],
+      (cri_q[4] - cri_q[2])),
+  
+  `StDev` = c(pop_sd,
+      bnb_sd,
+      cri_sd))
+
+kable(es, digits = 0)
+```
+
+Then, we can visualize the table above by creating the histograms.
+
+```{r, warning = FALSE, message = FALSE}
+cute_pop_hg <- pop_hg +
+  theme_bw() +
+  scale_x_continuous(name = "Population per tract") +
+  scale_y_continuous(name = "Number of tracts") +
+  theme(axis.text.x = element_text(angle = 90))
+
+cute_bnb_hg <- bnb_hg +
+  theme_bw() + 
+  scale_x_continuous(name = "Number of Airbnbs\n(per tract)")+
+  scale_y_continuous(name = "Number of tracts") +
+  theme(axis.text.x = element_text(angle = 90)) +
+  scale_x_continuous(trans = "log",
+                     breaks = c(1, 3, 10, 50, 150),
+                     labels = c("1", "5", "10", "50", "150"))
+
+cute_cri_hg = cri_hg +
+  theme_bw() +
+  scale_x_continuous(name = "Crime cases \n(per tract)") +
+  scale_y_continuous(name = "Number of tracts") +
+  theme(axis.text.x = element_text(angle = 90)) +
+  scale_x_continuous(trans = "log",
+                     breaks = c(5, 50, 300, 3000),
+                     labels = c("5", "50", "300", "3000"))
+
+grid.arrange(cute_pop_hg, cute_bnb_hg, cute_cri_hg, ncol = 3)
+```
+
+## 9. Displaying our results (Categorical Variables)
+First, we made a one sample t-test to reach the 95% CI for the proportion of the sample in each category. We start from the <Day of the Week> first and than AM vs. PM comparison.
+
+The following table and histogram shows the crime distribution per day of week.
+
+```{r, warning = FALSE, message = FALSE}
+pct_sun <-t.test(bos_pop$date == "Sun")
+pct_mon <-t.test(bos_pop$date == "Mon")
+pct_tue <-t.test(bos_pop$date == "Tue")
+pct_wed <-t.test(bos_pop$date == "Wed")
+pct_thu <-t.test(bos_pop$date == "Thu")
+pct_fri <-t.test(bos_pop$date == "Fri")
+pct_sat <-t.test(bos_pop$date == "Sat")
+
+dow <- tibble(
+  
+  '2020 Crime Distribution: Day of Week' = 
+    c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"),        
+  
+  `Sample proportion` = c(pct_sun$estimate * 100,
+                          pct_mon$estimate * 100,
+                          pct_tue$estimate * 100,
+                          pct_wed$estimate * 100,
+                          pct_thu$estimate * 100,
+                          pct_fri$estimate * 100,
+                          pct_sat$estimate * 100),
+  
+  `95% CI - low` = c(pct_sun$conf.int[1] * 100,
+                    pct_mon$conf.int[1] * 100,
+                    pct_tue$conf.int[1] * 100,
+                    pct_wed$conf.int[1] * 100,
+                    pct_thu$conf.int[1] * 100,
+                    pct_fri$conf.int[1] * 100,
+                    pct_sat$conf.int[1] * 100),
+  
+  `95% CI - high` = c(pct_sun$conf.int[2] * 100,
+                    pct_mon$conf.int[2] * 100,
+                    pct_tue$conf.int[2] * 100,
+                    pct_wed$conf.int[2] * 100,
+                    pct_thu$conf.int[2] * 100,
+                    pct_fri$conf.int[2] * 100,
+                    pct_sat$conf.int[2] * 100))
+
+kable(dow, digits = 0)
+```
+
+```{r}
+
+ggplot(dow) +
+  geom_bar(aes(x = `2020 Crime Distribution: Day of Week`, 
+               y = `Sample proportion`),
+           stat = "identity") +
+  geom_errorbar(aes(x = `2020 Crime Distribution: Day of Week`, 
+               y = `Sample proportion`,
+               ymin = `95% CI - low`,
+               ymax = `95% CI - high`),
+           stat = "identity") +
+  scale_y_continuous(name = "% of occurrence in all tracts",
+                     breaks = c(0, 5, 10, 15, 20, 25),
+                     labels = c("0", "5%", "10%", "15%", "20%", "25%")) +
+  theme_bw()
+```
+
+
+The following table and histogram shows the crime distribution between AM vs PM.
+
+```{r}
+
+pct_AM <- t.test(bos_pop$time == "AM")
+pct_PM <- t.test(bos_pop$time == "PM")
+
+AM_vs_PM <- tibble(`2020 Crime Distribution: AM vs PM` = c("AM", "PM"),
+
+`Sample proportion` = c(pct_AM$estimate * 100, pct_PM$estimate *100),
+
+`95% CI - low` = 
+  c(pct_AM$conf.int[1] * 100, pct_PM$conf.int[1] * 100),
+
+`95% CI - high` = 
+  c(pct_AM$conf.int[2] * 100, pct_PM$conf.int[2] * 100))
+
+kable(AM_vs_PM, digits = 0)
+```
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+ggplot(AM_vs_PM) +
+  geom_bar(aes(x = `2020 Crime Distribution: AM vs PM`, 
+               y = `Sample proportion`),
+           stat = "identity") +
+  geom_errorbar(aes(x = `2020 Crime Distribution: AM vs PM`, 
+               y = `Sample proportion`,
+               ymin = `95% CI - low`,
+               ymax = `95% CI - high`),
+           stat = "identity") +
+  scale_y_continuous(name = "% of occurrence in all tracts",
+                     breaks = c(0, 20, 40, 60, 80),
+                     labels = c("0", "20%", "40%", "60%", "80%")) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90)) 
+```
+
+## 10. Conclusion
+
+* The number of crime incidences were especially high on Mondays and Tuesdays. 
+
+* The number of crime incidences were by far higher in Ante_Meridian than in Post_Meridian. 
+
+Although our team expected crime rate would be higher on weekends, and in the afternoon & at night, the results were surprisingly different - in fact, the opposite. 
+
+```{r}
+
+```
+
+
+## 11. References
+
+* Crime data : https://www.policedatainitiative.org/datasets/
+
+* Airbnb data : http://insideairbnb.com/boston/?neighbourhood=&filterEntireHomes=false&filterHighlyAvailable=false&filterRecentReviews=false&filterMultiListings=false
