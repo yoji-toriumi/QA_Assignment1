@@ -1,10 +1,11 @@
 ---
-title: "[SES 5215] Assignment_1: Research Questions & Assignment 2: Uncertainty and Error"
+title: "[SES 5215] Assignment_3: Bivariate analysis"
 author: "Francisco Montes, Terry Kim, Yoji Toriumi"
-date: "10/29/2021"
+date: "11/8/2021"
 output: 
   rmdformats::downcute
 ---
+# Assignment 1
 ## 1. Research question
 Is the number of Airbnbs within the Suffolk County correlated with the number of crimes?
 
@@ -102,14 +103,14 @@ bos_pop <- bos_pop %>%
 
 ```{r}
 bos_pop <- bos_pop %>% 
-  mutate(income = case_when(0 < `incomeE` & `incomeE` < 9999 ~ "0_9999",
-                            10000 < `incomeE` & `incomeE` < 14999 ~ "10000_14999",
-                            15000 < `incomeE` & `incomeE` < 24999 ~ "15000_24999",
-                            25000 < `incomeE` & `incomeE` < 34999 ~ "25000_34999",
-                            35000 < `incomeE` & `incomeE` < 49999 ~ "35000_49999",
-                            50000 < `incomeE` & `incomeE` < 64999 ~ "50000_64999",
-                            65000 < `incomeE` & `incomeE` < 74999 ~ "65000_74999",
-                            75000 < `incomeE` ~ "75000"))
+  mutate(income = case_when(0 <= `incomeE` & `incomeE` <= 9999 ~ "0_9999",
+                            10000 <= `incomeE` & `incomeE` <= 14999 ~ "10000_14999",
+                            15000 <= `incomeE` & `incomeE` <= 24999 ~ "15000_24999",
+                            25000 <= `incomeE` & `incomeE` <= 34999 ~ "25000_34999",
+                            35000 <= `incomeE` & `incomeE` <= 49999 ~ "35000_49999",
+                            50000 <= `incomeE` & `incomeE` <= 64999 ~ "50000_64999",
+                            65000 <= `incomeE` & `incomeE` <= 74999 ~ "65000_74999",
+                            75000 <= `incomeE` ~ "75000"))
 ```
 
 After this procedure, we decided to explore if the crime patterns can be gauged in "day of the week" basis.
@@ -196,7 +197,7 @@ bos_pop <- bos_pop %>%
   select(1:12, 20, 23)
 
 ggplot(bos_pop) +
-  geom_sf(aes(fill = crime))
+  geom_sf(aes(fill = date))
 ```
 
 ```{r}
@@ -215,6 +216,7 @@ ggplot(bos_pop) +
 kable(head(bos_pop))
 ```
 
+# Assignment 2
 ## 7. Statistical Analysis
 Based on the trimmed data we loaded, we decided to further examine the significance level of our hypothesis to meaningfully contribute to the research duly performed and noted in our references.
 
@@ -436,14 +438,121 @@ ggplot(AM_vs_PM) +
 
 * The number of crime incidences were by far higher in Ante_Meridian than in Post_Meridian. 
 
-Although our team expected crime rate would be higher on weekends, and in the afternoon & at night, the results were surprisingly different - in fact, the opposite. 
+Although our team expected crime rate would be higher on weekends, and in the afternoon & at night, the results were surprisingly different - in fact, the opposite.
+
+# Assignment 3
+## 11. Visualization of two variables
+
+Scatter plot of Airbnb density to crime density
 
 ```{r}
+data <-  bos_pop %>% 
+  filter(is.finite(crime_den))
 
+ggplot(data) +
+  geom_point(aes(x = airbnb_den, y = crime_den)) +
+  theme_classic()
 ```
 
+```{r}
+ggplot(data) +
+  geom_point(aes(x = tpopE, y = crime_den)) +
+  theme_classic()
+```
 
-## 11. References
+```{r}
+ggplot(data) +
+  geom_boxplot(aes(x = date, y = crime_den, fill = date, color = date), alpha = 1/2) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  theme_classic()
+```
+
+```{r}
+ggplot(data) +
+  geom_boxplot(aes(x = time, y = crime_den, fill = time, color = time), alpha = 1/2) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  theme_classic()
+```
+
+```{r}
+ggplot(data) +
+  geom_boxplot(aes(x = income, y = crime_den, fill = income, color = income), alpha = 1/2) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  theme_classic()
+```
+
+## 12. Bivariate Analysis
+Correlations: crime density and population
+
+```{r}
+cor.test(~ crime_den + tpopE, data = data)
+```
+Correlations: crime density and airbnb density
+
+```{r}
+cor.test(~ crime_den + airbnb_den, data = data)
+```
+Regression: crime density and population
+
+```{r}
+pop_model <- lm(crime_den ~ tpopE, data = data)
+summary(pop_model)
+```
+
+```{r}
+airbnb_model <- lm(crime_den ~ airbnb_den, data = data)
+summary(airbnb_model)
+```
+
+```{r}
+date_model <- lm(crime_den ~ date, data = data)
+summary(date_model)
+```
+
+```{r}
+time_model <- lm(crime_den ~ time, data = data)
+summary(time_model)
+```
+
+```{r}
+income_model <- lm(crime_den ~ income, data = data)
+summary(income_model)
+```
+Difference in means/regression on categorical variables
+
+Crime den vs time
+
+```{r}
+t.test(crime_den ~ time, data)
+```
+## 13. Visualization of two variables with regression line
+
+```{r}
+ggplot(data) +
+  geom_point(aes(x = airbnb_den, y = crime_den)) +
+  geom_abline(slope = 2.239048, intercept =  0.065152, color = "tomato") +
+  theme_classic()
+```
+
+Since the graph is extended by one observation, in the following graph, we filtered the observation and focused on the other observations.
+
+```{r}
+data %>% 
+  filter(crime_den < 0.9) %>% 
+  ggplot(aes(x = airbnb_den, y = crime_den)) +
+  geom_point() +
+  geom_abline(slope = 2.239048, intercept =  0.065152, color = "tomato") +
+  theme_classic()
+```
+
+```{r}
+ggplot(data) +
+  geom_point(aes(x = tpopE, y = crime_den)) +
+  geom_abline(slope = -1.028e-05, intercept =  1.213e-01, color = "tomato") +
+  theme_classic()
+```
+
+## 14. References
 
 * Crime data : https://www.policedatainitiative.org/datasets/
 
