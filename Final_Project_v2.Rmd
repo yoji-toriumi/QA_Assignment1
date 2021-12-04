@@ -1,0 +1,592 @@
+---
+title: "Final Project"
+author: "Francisco Montes, Terry Kim, Yoji Toriumi"
+date: "12/3/2021"
+output: 
+  rmdformats::downcute
+---
+
+# 1. Introduction
+
+* Research Question: Is the number of Airbnbs within Suffolk County, Massachusetts correlated with the number of crimes?
+
+* Why is it important: The business model of Airbnb has been scrutinized ever since it was first conceived in the past decade. Like Uber, Airbnb has received much criticism for the lack of quality control and safety issues. Thus, we decided to delve into the relationship between this new kind of hospitality form and crime generated from this business. 
+
+* Hypothesis: The number of crimes per tract within Suffolk County is correlated with the number of Airbnbs in the same area. 
+
+# 2. Background
+
+* Ke, O’Brien, and Heydari revealed that an increase in Airbnbs have disrupted neighborhood social organizations specifically by replacing long term residents, who normally built trust and strong communication ties in the neighborhood, with transient people.  In addition to the social disruption of the neighborhood fabric, they concluded that Airbnb guests are perceived by criminals to be vulnerable and naïve, so they attract attention. (https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0253315).
+
+* Another study that Ke, O’Brien, and Heydari referred to examine the correlation between crime and Airbnb listings, not controlling for other neighborhood characteristics nor the temporal relationship between the arrival of Airbnb listings and shifts in crime rates. (Xu Y.-H., Pennington-Gray L. & Kim J. The sharing economy: a geographically weighted regression approach to examine crime and the shared lodging sector. Journal of travel research 58, 1193–1208, (2019)).
+
+* The last study available in the literature landscape used policy implementations as a natural experiment but analyzed only at the citywide scale. This research was also referred by  Ke, O’Brien, and Heydari. (Han, W. & Wang, X. Does home sharing impact crime rate? a tale of two cities. https://aisel.aisnet.org/icis2019/sustainable_is/sustainable_is/6/ (2019)).
+
+# 3. Data
+## Categorical variables
+The two categorical variables used in our research can be summarized as below:
+
+* Median Household Income in the past 12 months ($ / p.a.)
+* Median Monthly Gross Rent in 2019 ($ / monthly)
+
+
+## Continuous variables
+The three continuous variables used in our research can be summarized as below:
+
+* Population within each tract
+* Number of Airbnbs
+* Number of Crimes
+
+```
+* For crime we used data recorded by the City of Boston Police and organized by the Police Data initative. It lacks incidents that were never reported to the police department.
+
+* For geography, we only examined Suffolk County, so not every single county within Massachusetts is included.
+
+* We focused on Airbnbs, but there is a number of non-hotel residences that may have been included in crime reportings to the police department. The number of Airbnbs for the year 2021 was pulled from Inside Airbnb.
+
+* Median household income, median monthly gross rent, and population data was retrieved from the American Community Survey 2019.
+```
+
+We calculated the density of Airbnbs and the crimes reported within each tract within the Suffolk County, and the rows in the following table represent tracts in Suffolk County:
+
+```{r, warning = FALSE, message = FALSE, echo=FALSE}
+library(tidyverse)
+library(sf)
+library(ggthemes)
+library(ggspatial)
+library(tidycensus)
+library(knitr)
+library(readxl)
+library(gridExtra)
+library(jtools)
+library(weights)
+library(srvyr)
+library(survey)
+library(interactions)
+knitr::opts_chunk$set(message = FALSE, echo = FALSE)
+```
+```{r, warning = FALSE, message = FALSE, echo=FALSE}
+MA_state_plane <- "+proj=lcc +lat_1=41.71666666666667 +lat_2=42.68333333333333 +lat_0=41 +lon_0=-71.5 +x_0=200000 +y_0=750000 +ellps=GRS80 +units=m +no_defs"
+
+airbnb <- read_csv("http://data.insideairbnb.com/united-states/ma/boston/2021-09-19/visualisations/listings.csv")
+crime <- read_csv("https://data.boston.gov/dataset/6220d948-eae2-4e4b-8723-2dc8e67722a3/resource/f4495ee9-c42c-4019-82c1-d067f07e45d2/download/tmpefo1y6tr.csv")
+
+airbnb <- airbnb %>% 
+  st_as_sf(coords = c("longitude", "latitude"), crs = "WGS84") %>% 
+  st_transform(MA_state_plane)
+
+crime <- crime %>% 
+  filter(Lat > 0) %>% 
+  st_as_sf(coords = c("Long", "Lat"), crs = "WGS84")  %>%
+  st_transform(MA_state_plane)
+
+acsvars <- load_variables(2019, "acs5")
+```
+```{r, warning = FALSE, message = FALSE, echo =FALSE, results= FALSE}
+bos_pop <- get_acs(geography = "tract", county = "Suffolk", state = "MA", 
+                           year = 2019, survey = "acs5",
+                           variables = c(tpop = "B01001_001", income = "B19113_001", rent = "B25064_001"),
+                           output = "wide", geometry = TRUE)
+
+bos_pop <- bos_pop %>% 
+  st_transform(MA_state_plane)
+
+bos_pop <- bos_pop %>%
+  mutate(airbnb = lengths(st_covers(bos_pop, airbnb)))
+
+bos_pop <- bos_pop %>% 
+  mutate(crime = lengths(st_covers(bos_pop, crime)))
+
+bos_pop <- bos_pop %>% 
+  mutate(crime_den = crime / tpopE) %>% 
+  mutate(airbnb_den = airbnb / tpopE)
+```
+```{r, echo =FALSE}
+bos_pop <- bos_pop %>% 
+  mutate(income = case_when(0 <= `incomeE` & `incomeE` <= 24999 ~ "00000_24999",
+                            25000 <= `incomeE` & `incomeE` <= 34999 ~ "25000_34999",
+                            35000 <= `incomeE` & `incomeE` <= 49999 ~ "35000_49999",
+                            50000 <= `incomeE` & `incomeE` <= 64999 ~ "50000_64999",
+                            65000 <= `incomeE` & `incomeE` <= 74999 ~ "65000_74999",
+                            75000 <= `incomeE` ~ "75000_"))
+
+bos_pop <- bos_pop %>% 
+  mutate(rent = case_when(0 <= `rentE` & `rentE` <= 499 ~ "0000_0499",
+                            500 <= `rentE` & `rentE` <= 999 ~ "0500_0999",
+                            1000 <= `rentE` & `rentE` <= 1499 ~ "1000_1499",
+                            1500 <= `rentE` & `rentE` <= 1999 ~ "1500_1999",
+                            2000 <= `rentE` & `rentE` <= 2499 ~ "2000_2499",
+                            2500 <= `rentE` & `rentE` <= 2999 ~ "2500_2999",
+                            3000 <= `rentE` ~ "3000_"))
+```
+```{r, warning = FALSE, echo = FALSE, message = FALSE}
+bos_pop <- bos_pop %>% 
+  select(1:3, 9:15)
+
+kable(head(bos_pop),
+      col.names = c('GEOID', 'NAME', 'Population', 'Number of Airbnbs', 'Number of Crimes', "Number of Airbnbs / person", "Number of Crimes / person", "Median Income", "Median Rent", "Geometry"))
+```
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+pop_t <- t.test(bos_pop$tpopE)
+bnb_t <- t.test(bos_pop$airbnb)
+cri_t <- t.test(bos_pop$crime)
+
+pop_q <- quantile(bos_pop$tpopE)
+bnb_q <- quantile(bos_pop$airbnb)
+cri_q <- quantile(bos_pop$crime)
+
+pop_sd <- sd(bos_pop$tpopE)
+bnb_sd <- sd(bos_pop$airbnb)
+cri_sd <- sd(bos_pop$crime)
+
+pop_hg <- ggplot(bos_pop) +
+  geom_histogram(aes(x = tpopE),
+                 bins = 30)
+
+bnb_hg <- ggplot(bos_pop) +
+  geom_histogram(aes(x = airbnb), bins = 30) +
+  scale_x_continuous(name = "Number of Airbnbs per tract") 
+
+cri_hg <- ggplot(bos_pop) +
+  geom_histogram(aes(x = crime), bins = 30) + 
+  scale_x_continuous(name = "Number of Crimes per tract") 
+```
+
+The result of summary information and histograms of continuous variables are shown as the following:
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+es <- tibble(
+  
+  Variable = c("Tract Population", 
+      "Number of Airbnbs", 
+      "Number of crimes"),
+  
+  `Sample mean` = c(pop_t$estimate,
+      bnb_t$estimate,
+      cri_t$estimate),
+  
+  `Population mean (95% CI) - low` = c(pop_t$conf.int[1],
+      bnb_t$conf.int[1],
+      cri_t$conf.int[1]),
+  
+  `Population mean (95% CI) - high` = c(pop_t$conf.int[2],
+      bnb_t$conf.int[2],
+      cri_t$conf.int[2]),
+  
+  Median = c(pop_q[3],
+      bnb_q[3],
+      cri_q[3]),
+  
+  `I-Q range` = c(pop_q[4] - pop_q[2],
+      bnb_q[4] - bnb_q[2],
+      (cri_q[4] - cri_q[2])),
+  
+  `StDev` = c(pop_sd,
+      bnb_sd,
+      cri_sd))
+
+kable(es, digits = 0)
+```
+```{r, warning = FALSE, message = FALSE, echo =FALSE}
+cute_pop_hg <- pop_hg +
+  theme_bw() +
+  scale_x_continuous(name = "Population per tract") +
+  scale_y_continuous(name = "Number of tracts") +
+  theme(axis.text.x = element_text(angle = 90))
+
+cute_bnb_hg <- bnb_hg +
+  theme_bw() + 
+  scale_y_continuous(name = "Number of tracts") +
+  theme(axis.text.x = element_text(angle = 90)) +
+  scale_x_continuous(trans = "log",
+                     breaks = c(1, 3, 10, 50, 150),
+                     labels = c("1", "5", "10", "50", "150"),
+                     name = "Number of Airbnbs\n(per tract)")
+
+cute_cri_hg = cri_hg +
+  theme_bw() +
+  scale_y_continuous(name = "Number of tracts") +
+  theme(axis.text.x = element_text(angle = 90)) +
+  scale_x_continuous(trans = "log",
+                     breaks = c(5, 50, 300, 3000),
+                     labels = c("5", "50", "300", "3000"),
+                     name = "Crime cases \n(per tract)")
+
+grid.arrange(cute_pop_hg, cute_bnb_hg, cute_cri_hg, ncol = 3)
+```
+```{r, warning = FALSE, message = FALSE, echo=FALSE, results=FALSE}
+pct_00000_24999 <-t.test(bos_pop$income == "00000_24999")
+pct_25000_34999 <-t.test(bos_pop$income == "25000_34999")
+pct_35000_49999 <-t.test(bos_pop$income == "35000_49999")
+pct_50000_64999 <-t.test(bos_pop$income == "50000_64999")
+pct_65000_74999 <-t.test(bos_pop$income == "65000_74999")
+pct_75000_ <-t.test(bos_pop$income == "75000_")
+
+income_kable <- tibble(
+  
+  'Median Income' = 
+    c("$0 ~ 24,999", "$25,000 ~ 34,999", "$35,000 ~ 49,999", "$50,000 ~ 64,999", "$65,000 ~ 74,999", "$75,000 ~"),        
+  
+  `Sample proportion` = c(pct_00000_24999$estimate * 100,
+                          pct_25000_34999$estimate * 100,
+                          pct_35000_49999$estimate * 100,
+                          pct_50000_64999$estimate * 100,
+                          pct_65000_74999$estimate * 100,
+                          pct_75000_$estimate * 100),
+  
+  `95% CI - low` = c(pct_00000_24999$conf.int[1] * 100,
+                    pct_25000_34999$conf.int[1] * 100,
+                    pct_35000_49999$conf.int[1] * 100,
+                    pct_50000_64999$conf.int[1] * 100,
+                    pct_65000_74999$conf.int[1] * 100,
+                    pct_75000_$conf.int[1] * 100),
+  
+  `95% CI - high` = c(pct_00000_24999$conf.int[2] * 100,
+                    pct_25000_34999$conf.int[2] * 100,
+                    pct_35000_49999$conf.int[2] * 100,
+                    pct_50000_64999$conf.int[2] * 100,
+                    pct_65000_74999$conf.int[2] * 100,
+                    pct_75000_$conf.int[2] * 100))
+
+kable(income_kable, digits = 0)
+```
+
+The result of the distributions of categorical variables are shown as the following:
+
+```{r, echo=FALSE}
+
+ggplot(income_kable) +
+  geom_bar(aes(x = `Median Income`, 
+               y = `Sample proportion`, fill = `Median Income`),
+           alpha = 2/3,
+                      stat = "identity") +
+  geom_errorbar(aes(x = `Median Income`, 
+               y = `Sample proportion`,
+               ymin = `95% CI - low`,
+               ymax = `95% CI - high`),
+           stat = "identity") +
+  scale_y_continuous(name = "% of occurrence in all tracts",
+                     breaks = c(0, 10, 20, 30, 40, 50),
+                     labels = c("0", "10%", "20%", "30%", "40%", "50%")) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90))
+```
+```{r, echo=FALSE, results=FALSE}
+
+pct_0000_0499 <- t.test(bos_pop$rent == "0000_0499")
+pct_0500_0999 <- t.test(bos_pop$rent == "0500_0999")
+pct_1000_1499 <- t.test(bos_pop$rent == "1000_1499")
+pct_1500_1999 <- t.test(bos_pop$rent == "1500_1999")
+pct_2000_2499 <- t.test(bos_pop$rent == "2000_2499")
+pct_2500_2999 <- t.test(bos_pop$rent == "2500_2999")
+pct_3000_ <- t.test(bos_pop$rent == "3000_")
+
+rent_kable <- tibble(`Median Rent` = c("$0000 ~ 0499", "$0500 ~ 0999", "$1,000 ~ 1,499","$1,500 ~ 1,999",
+                                                              "$2,000 ~ 2,499", "$2,500 ~ 2,999", "$3,000 ~"),
+
+`Sample proportion` = c(pct_0000_0499$estimate * 100,
+                        pct_0500_0999$estimate *100,
+                        pct_1000_1499$estimate *100,
+                        pct_1500_1999$estimate *100,
+                        pct_2000_2499$estimate *100,
+                        pct_2500_2999$estimate *100,
+                        pct_3000_$estimate *100),
+
+`95% CI - low` = 
+  c(pct_0000_0499$conf.int[1] * 100,
+    pct_0500_0999$conf.int[1] * 100,
+    pct_1000_1499$conf.int[1] * 100,
+    pct_1500_1999$conf.int[1] * 100,
+    pct_2000_2499$conf.int[1] * 100,
+    pct_2500_2999$conf.int[1] * 100,
+    pct_3000_$conf.int[1] * 100),
+
+`95% CI - high` = 
+  c(pct_0000_0499$conf.int[2] * 100,
+    pct_0500_0999$conf.int[2] * 100,
+    pct_1000_1499$conf.int[2] * 100,
+    pct_1500_1999$conf.int[2] * 100,
+    pct_2000_2499$conf.int[2] * 100,
+    pct_2500_2999$conf.int[2] * 100,
+    pct_3000_$conf.int[2] * 100))
+
+kable(rent_kable, digits = 0)
+```
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+ggplot(rent_kable) +
+  geom_bar(aes(x = `Median Rent`, 
+               y = `Sample proportion`,
+               fill = `Median Rent`),
+           alpha = 2/3,
+           stat = "identity") +
+  geom_errorbar(aes(x = `Median Rent`, 
+               y = `Sample proportion`,
+               ymin = `95% CI - low`,
+               ymax = `95% CI - high`),
+           stat = "identity") +
+  scale_y_continuous(name = "% of occurrence in all tracts",
+                     breaks = c(0, 20, 40, 60, 80),
+                     labels = c("0", "20%", "40%", "60%", "80%")) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90)) 
+```
+
+# 4. Methods
+
+* Independent variables: the number of Airbnbs per tract, median family income in the past 12 months, and median monthly gross rent in 2019.
+
+* Dependent Variables: the number of crimes per tracts
+
+* Purpose of Study: to assess whether higher exposure to Airbnbs indeed causes greater crime rates in the respective neighborhood.
+
+* We used bivariate regression model, linear-transformed multivariate regression model, and interaction model.
+
+# 5. Results
+
+## I. Bivariate Regression
+
+Crime density and Airbnb density: 
+The coefficient is 2.45. The correlation between crime density and Airbnb density is significant at a 0.1% level.
+
+```{r}
+data <-  bos_pop %>% 
+  filter(is.finite(crime_den))
+airbnb_model <- lm(crime_den ~ airbnb_den, data = data)
+summary(airbnb_model)
+```
+
+Crime density and population:
+The coefficient is -1.1e-05. The correlation between crime density and population is significant at a 5% level.
+
+```{r}
+pop_model <- lm(crime_den ~ tpopE, data = data)
+summary(pop_model)
+```
+
+Crime density and income:
+None of the income category has a significant correlation with crime density.
+
+```{r}
+income_model <- lm(crime_den ~ income, data = data)
+summary(income_model)
+```
+
+Crime density and rent:
+The category of monthly rent from 2,500 to 2,999 dollars increased 0.12 percentage points more than that of from 0 to 499 dollars at a 95% confidence level.
+
+```{r}
+pop_model <- lm(crime_den ~ rent, data = data)
+summary(pop_model)
+```
+
+* Remarks: We are 99% confident that our model does have a significant, positive coefficient (2.45) for the Airbnbs variable, indicating that more Airbnbs are associated with higher crime rates.
+
+* We visualized these two variables, crime and Airbnb density, in scatter plot form. One observation on the plot is the outlier in the top right side showing where part of Fenway Park is at. Since the population is lower, but the number of crime as well as Airbnb is higher, that is why the crime and Airbnb density is outstanding. 
+
+```{r}
+ggplot(data) +
+  geom_point(aes(x = airbnb_den, y = crime_den)) +
+  geom_abline(slope = 2.239048, intercept =  0.065152, color = "tomato") +
+  theme_classic()
+```
+
+* Lastly, we visualized these two variables, crime density and population with regression line. 
+```{r}
+ggplot(data) +
+  geom_point(aes(x = tpopE, y = crime_den)) +
+  geom_abline(slope = -1.028e-05, intercept =  1.213e-01, color = "tomato") +
+  theme_classic()
+```
+
+
+## II. Multivariate Regression
+
+we implemented multivariate regression to see the relationship between crime density and the other four variables and how they act with and against each other.
+
+```{r}
+full_model <- lm(crime_den ~ tpopE + airbnb_den + income + rent, data)
+
+summary(full_model)
+```
+
+
+* The first thing that engaged our attention was the p-value of total population vs. crime rate increased (0.02 to 0.60) and the correlation became less significant (from at a 5 % to more than 10 %) as we performed multivariate regression. In addition, the absolute value of the coefficient of total population decreased from -1.1e-05 to -2.1e-06.
+
+* Also, though the correlation is still significant at a 1 %, the p-value of Airbnb density increased (2e-16 to 0.0041) and the coefficient increased (2.45 to 3.67) in the multivariate regression analysis. This result signifies that not a single variable has affected the crime rate but a multitude of variables played their roles and correlated each other to some extent.
+
+* The same as the bivariate analysis, the categorical variable (income and rent by range) did not show high significance in our multivariate regression analysis. Therefore, we cannot reject the null hypothesis and conclude that the income and rent do not impact crime rate.
+
+* As a result, Airbnb density is the only variable that has a correlation between crime density at less than 5% significant level and the other variables do not have a significant relationship with crime density. 
+
+* Overall, our model explains about 17.2 percent of the variation in crime rates in Suffolk County.
+
+Realizing that the unit of our analysis above is too bulky, we took a stride to mean-center the model and  revise the unit of measure by multiplying 1,000 on the crime density and dividing the same number from total population.
+```{r, results=FALSE}
+centered_data <- data %>% 
+  mutate(tpopE = tpopE - mean(tpopE, na.rm = TRUE),
+         airbnb_den = airbnb_den - mean(airbnb_den, na.rm = TRUE))
+
+centered_model <- lm(crime_den ~ tpopE + airbnb_den + income + rent, centered_data)
+
+export_summs(full_model, centered_model,
+             error_format = "(p = {p.value})",
+             error_pos = "same",
+             model.names = c("Initial", "Centered"))
+```
+```{r}
+centered_data_scaled <- centered_data %>% 
+  mutate(crime_den = crime_den * 1000,
+         tpopE_1000 = tpopE / 1000,
+         airbnb_den_1000 = airbnb_den* 1000)
+
+centered_model_scaled <- lm(crime_den ~ tpopE_1000 + airbnb_den_1000 + income + rent, centered_data_scaled)
+
+coeff_names_scaled <- c("Constant" = "(Intercept)",
+                 "Airbnb density (# Airbnb per tract)" = "airbnb_den",
+                 "Airbnb density (#Airbnb per 1,000 residents)" = "airbnb_den_1000",
+                 "Population" = "tpopE",
+                 "Population (1,000 ppl)" = "tpopE_1000",
+                 "Annual income from $25,000 to $34,999" = "income25000_34999",
+                 "Annual income from $35,000 to $49,999" = "income35000_49999",
+                 "Annual income from $50,000 to $64,999" = "income50000_64999",
+                 "Annual income from $65,000 to $74,999" = "income65000_74999",
+                 "Annual income $75,000 or above" = "income75000_",
+                 "Monthly rent from $500 to $999" = "rent0500_0999",
+                 "Monthly rent from $1,000 to $1,499" = "rent1000_1499",
+                 "Monthly rent from $1,500 to $1,999" = "rent1500_1999",
+                 "Monthly rent from $2,000 to $2,499" = "rent2000_2499",
+                 "Monthly rent from $2,500 to $2,999" = "rent2500_2999",
+                 "Monthly rent $3,000 or above" = "rent3000_"
+                 )
+
+export_summs(full_model, centered_model_scaled,
+             error_format = "(p = {p.value})",
+             error_pos = "same",
+             model.names = c("Initial\n(cases per capita)", 
+                             "Centered\n(cases per 1,000 residents)"),
+             coefs = coeff_names_scaled)
+```
+
+Now the coefficients are all adjusted while the R-square value is left unchanged the same for all three models. Since we controlled the scale for both crime and Airbnb density by the same number (multiplying and dividing by 1,000), the coefficient of Airbnb density remains ceteris paribus.
+
+## III. Interaction Model
+We also implemented interaction models to see whether there is a relationship between Airbnb density and crime density, depending on income or rent level.
+
+```{r}
+interaction_model_income <- lm(crime_den ~ tpopE_1000 + airbnb_den_1000 + income + rent + airbnb_den_1000*income, centered_data_scaled)
+
+coeff_names_scaled_log_interaction_income <- c("Constant" = "(Intercept)",
+                 "Airbnb density (number of Airbnb per capita)" = "airbnb_den",
+                 "Airbnb density (number of Airbnb per 1,000 residents)" = "airbnb_den_1000",
+                 "Population" = "tpopE",
+                 "Population (1,000 people)" = "tpopE_1000",
+                 "Annual income from $25,000 to $34,999" = "income25000_34999",
+                 "Annual income from $35,000 to $49,999" = "income35000_49999",
+                 "Annual income from $50,000 to $64,999" = "income50000_64999",
+                 "Annual income from $65,000 to $74,999" = "income65000_74999",
+                 "Annual income $75,000 or above" = "income75000_",
+                 "Monthly rent from $500 to $999" = "rent0500_0999",
+                 "Monthly rent from $1,000 to $1,499" = "rent1000_1499",
+                 "Monthly rent from $1,500 to $1,999" = "rent1500_1999",
+                 "Monthly rent from $2,000 to $2,499" = "rent2000_2499",
+                 "Monthly rent from $2,500 to $2,999" = "rent2500_2999",
+                 "Monthly rent $3,000 or above" = "rent3000_",
+                 "Airbnb density * Annual income from $25,000 to $34,999" = "airbnb_den_1000:income25000_34999",
+                 "Airbnb density * Annual income from $35,000 to $49,999" = "airbnb_den_1000:income35000_49999",
+                 "Airbnb density * Annual income from $50,000 to $64,999" = "airbnb_den_1000:income50000_64999",
+                 "Airbnb density * Annual income from $65,000 to $74,999" = "airbnb_den_1000:income65000_74999",
+                 "Airbnb density * Annual income $75,000 or above" = "airbnb_den_1000:income75000_"
+                )
+
+export_summs(full_model, centered_model_scaled, interaction_model_income, 
+             error_format = "(p = {p.value})",
+             error_pos = "same",
+             model.names = c("Initial\n(cases per capita)",
+                             "Centered\n(cases per 1,000 residents)",
+                             "Centered, interaction\n(cases per 1,000 residents)"),
+             coefs = coeff_names_scaled_log_interaction_income)
+```
+
+```{r}
+interact_plot(interaction_model_income, pred = airbnb_den_1000, modx = income,
+              interval = TRUE) +
+  scale_x_continuous(breaks = c(-5, 0, 5, 15, 25),
+                     labels = c(-5, 0, 5, 15, 25),
+                     name = "Airbnb density per 1,000 residents") +
+  scale_y_continuous(name = "Predicted annual crime density per 1,000 residents")
+```
+```{r}
+interaction_model_rent <- lm(crime_den ~ tpopE_1000 + airbnb_den_1000 + income + rent + airbnb_den_1000*rent, centered_data_scaled)
+
+coeff_names_scaled_log_interaction_rent <- c("Constant" = "(Intercept)",
+                 "Airbnb density (number of Airbnb per capita)" = "airbnb_den",
+                 "Airbnb density (number of Airbnb per 1,000 residents)" = "airbnb_den_1000",
+                 "Population" = "tpopE",
+                 "Population (1,000 people)" = "tpopE_1000",
+                 "Annual income from $25,000 to $34,999" = "income25000_34999",
+                 "Annual income from $35,000 to $49,999" = "income35000_49999",
+                 "Annual income from $50,000 to $64,999" = "income50000_64999",
+                 "Annual income from $65,000 to $74,999" = "income65000_74999",
+                 "Annual income $75,000 or above" = "income75000_",
+                 "Monthly rent from $500 to $999" = "rent0500_0999",
+                 "Monthly rent from $1,000 to $1,499" = "rent1000_1499",
+                 "Monthly rent from $1,500 to $1,999" = "rent1500_1999",
+                 "Monthly rent from $2,000 to $2,499" = "rent2000_2499",
+                 "Monthly rent from $2,500 to $2,999" = "rent2500_2999",
+                 "Monthly rent $3,000 or above" = "rent3000_",
+                 "Airbnb density * Monthly rent from $500 to $999" = "airbnb_den_1000:rent0500_0999",
+                 "Airbnb density * Monthly rent from $1,000 to $1,499" = "airbnb_den_1000:rent1000_1499",
+                 "Airbnb density * Monthly rent from $1,500 to $1,999" = "airbnb_den_1000:rent1500_1999",
+                 "Airbnb density * Monthly rent from $2,000 to $2,499" = "airbnb_den_1000:rent2000_2499",
+                 "Airbnb density * Monthly rent from $2,500 to $2,999" = "airbnb_den_1000:rent2500_2999",
+                 "Airbnb density * Monthly rent $3,000 or above" = "airbnb_den_1000:rent3000_"
+                )
+
+export_summs(full_model, centered_model_scaled, interaction_model_rent, 
+             error_format = "(p = {p.value})",
+             error_pos = "same",
+             model.names = c("Initial\n(cases per capita)", 
+                             "Centered\n(cases per 1,000 residents)",
+                             "Centered, interaction\n(cases per 1,000 residents)"),
+             coefs = coeff_names_scaled_log_interaction_rent)
+```
+
+```{r}
+interact_plot(interaction_model_rent, pred = airbnb_den_1000, modx = rent,
+              interval = TRUE) +
+  scale_x_continuous(breaks = c(-5, 0, 5, 15, 25),
+                     labels = c(-5, 0, 5, 15, 25),
+                     name = "Airbnb density per 1,000 residents") +
+  scale_y_continuous(name = "Predicted annual crime density per 1,000 residents")
+```
+
+For both cases, the model fit slightly improved. On the other hand, the p-values of Airbnb density increased in both cases and were not significant at 90-percent confidence levels. In other words, the relationship between Airbnb density and crime density becomes weaker if we analyze the relationship based both on the income and rent level. One reason could be the sample sizes for income and rent level are not enough to reach a statistically significant level.
+
+# 6. Discussion
+
+* According to our bivariate regression we are 99% confident that there was a statistically significant correlation between crime
+density and Airbnb density. Therfore, the result supports our hypothesis that there is a correlation between the number of crimes and number of Airbnbs within Suffolk County, Massachusetts.
+
+* Limitations/Weaknesses: we did not elaborate on the types of crimes as they degree in severity (murder, theft, assault, etc). Our crime data only accounted for crimes recorded by the City of Boston Police, therefore not all crimes were reported. Our Airbnb data was solely from the year 2021 up to October, which means it was not a whole year and is possibly skewed from the effects that Covid-19 had on people afraid to travel.
+
+* Alternative Explanations: Our model indicated that the correlation between crime density and Airbnb was significant, however, a possible explanation that was not considered is that another variable, such as the number of tourists, could have had a connection to both the number of crimes and the number of Airbnbs.
+
+# 7. Conclusion
+
+* Takeaway: There is a relationship between the number of Airbnb density and the crime density. Our study that supports Ke, O’Brien, and Heydari finding. Also, there is no strong relationship between the number of crimes and income/rent level.
+
+* Future recommendations: future research should look closely at the types of crimes committed, conduct a comparative study for other varialbes such as number of tourists and hotels in the same area, or examine crime and Airbnbs correlations in other urban settings to verify the findings of the research. 
+
+# 8. References
+
+* Airbnb data : http://insideairbnb.com/boston/?neighbourhood=&filterEntireHomes=false&filterHighlyAvailable=false&filterRecentReviews=false&filterMultiListings=false
+
+* Crime data : https://www.policedatainitiative.org/datasets/
+
+* Demographic & Income data: United States Census Bureau. American Community Survey, 5-year estimates. 2019.
+
+* Han, Wang, X., Ahsen, M., and Wattal, S. 2019. Does Home Sharing Impact Crime Rate? An Empirical Investigation. SSRN Electronic Journal.
+
+* Ke, Laiyang, Daniel O’brien, and Babak Heydari. 2020. “Airbnb and Neighborhood Crime: The Incursion of Tourists or the Erosion of Local Social Dynamics?” SSRN Electronic Journal.
+
+* Xu, Yu-Hua, Lori Pennington-Gray, and Jinwon Kim. 2019. “The Sharing Economy: A Geographically Weighted Regression Approach to Examine Crime and the Shared Lodging Sector.” Journal of Travel Research 58 (7): 1193–1208.
