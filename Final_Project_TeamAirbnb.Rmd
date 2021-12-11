@@ -610,4 +610,4 @@ Considering the model fit (R-squared) and parsimony, our team prefers the multiv
 
 
 # 9. Appendix
-The final project that shows full codes is also available at: [here](https://yoji-toriumi.github.io/QA_Assignment1/Final_Project_v2.Rmd)
+The final project that shows full codes is also available at: [here](https://yoji-toriumi.github.io/QA_Assignment1/Final_Project_TeamAirbnb.Rmd)
